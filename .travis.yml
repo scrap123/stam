@@ -10,7 +10,6 @@ install:
 
 script:
   - python -m pytest --capture=no
-clear
 
 after_success:
   - codecov
