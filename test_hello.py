@@ -18,4 +18,4 @@ def test_total3():
 
 def test_total4():
     res = mathlib.calc_total(2, 130)
-    assert res==12
+    assert res==132
