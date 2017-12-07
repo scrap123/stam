@@ -10,6 +10,6 @@ def test_tota2():
     assert res==6
 
 
-def test_tota():
+def test_total3():
     res = mathlib.calc_total(2, 10)
     assert res==12
