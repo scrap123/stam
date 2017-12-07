@@ -7,7 +7,6 @@ python:
 
 install:
   - pip install codecov
-  - codecov --token=697f5051-f61d-4148-bea5-c4f9c411cf9e
 
 script:
   - python -m pytest --capture=no

@@ -8,3 +8,8 @@ def test_tota1():
 def test_tota2():
     res = mathlib.calc_total(2, 3)
     assert res==6
+
+
+def test_tota():
+    res = mathlib.calc_total(2, 10)
+    assert res==12
