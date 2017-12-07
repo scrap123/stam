@@ -1,0 +1,8 @@
+blazemeter/Model/Base
+blazemeter/Model/Mapping
+blazemeter/vendor
+apitest/.idea
+apitest/venv/
+apitest/Pipfile.lock
+apitest/__pycache__/
+apitest/.cache

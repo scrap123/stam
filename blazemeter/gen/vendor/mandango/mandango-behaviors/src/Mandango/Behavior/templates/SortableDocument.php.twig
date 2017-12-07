@@ -1,0 +1,232 @@
+<?php
+
+    /**
+     * Returns whether it is the first document.
+     *
+     * @return Boolean Whether it is the first document.
+     */
+    public function isFirst()
+    {
+        $minPosition = $this->getSortableRepository()->getMinPosition($this->sortableScopeCriteria());
+
+        return $this->get{{ options.field|ucfirst }}() === $minPosition;
+    }
+
+    /**
+     * Returns whether it is the last document.
+     *
+     * @return Boolean Whether it is the last document.
+     */
+    public function isLast()
+    {
+        $maxPosition = $this->getSortableRepository()->getMaxPosition($this->sortableScopeCriteria());
+
+        return $this->get{{ options.field|ucfirst }}() === $maxPosition;
+    }
+
+    /**
+     * Returns the previous document.
+     *
+     * @return Document|null The previous document, or null if it does not exist.
+     */
+    public function getPrevious()
+    {
+        return $this
+            ->getSortableRepository()
+            ->createQuery($this->sortableScopeCriteria())
+            ->mergeCriteria(array('{{ options.field }}' => array('$lt' => $this->get{{ options.field|ucfirst }}())))
+            ->sort(array('{{ options.field }}' => -1))
+            ->one()
+        ;
+    }
+
+    /**
+     * Returns the next document.
+     *
+     * @return Document|null The next document, or null if it does not exist.
+     */
+    public function getNext()
+    {
+        return $this
+            ->getSortableRepository()
+            ->createQuery($this->sortableScopeCriteria())
+            ->mergeCriteria(array('{{ options.field }}' => array('$gt' => $this->get{{ options.field|ucfirst }}())))
+            ->sort(array('{{ options.field }}' => 1))
+            ->one()
+        ;
+    }
+
+    /**
+     * Swaps the position with other document.
+     *
+     * @param Document $document The document to swap the position with.
+     *
+     * @throws \InvalidArgumentException If the document is not of the same class.
+     * @throws \RuntimeException         If any document is new.
+     * @throws \RuntimeException         If any document is modified.
+     * @throws \RuntimeException         If the scopes are different.
+     */
+    public function swapPosition($document)
+    {
+        if (get_class($this) !== get_class($document)) {
+            throw new \InvalidArgumentException('The document must be of the same class.');
+        }
+
+        if ($this->isNew() || $document->isNew()) {
+            throw new \RuntimeException('The documents cannot be new.');
+        }
+
+        if ($this->isModified() || $document->isModified()) {
+            throw new \RuntimeException('The documents cannot be modified.');
+        }
+
+        if ($this->sortableScopeCriteria() !== $document->sortableScopeCriteria()) {
+            throw new \RuntimeException('The documents do not have the same scope.');
+        }
+
+        $oldPosition = $this->get{{ options.field|ucfirst }}();
+        $newPosition = $document->get{{ options.field|ucfirst }}();
+
+        $this->set{{ options.field|ucfirst }}($newPosition)->save();
+        $document->refresh()->set{{ options.field|ucfirst }}($oldPosition)->save();
+    }
+
+    /**
+     * Moves the document up.
+     *
+     * @throws \RuntimeException If the document is already the first.
+     */
+    public function moveUp()
+    {
+        if (null === $previous = $this->getPrevious()) {
+            throw new \RuntimeException('The document is already the first.');
+        }
+
+        $this->swapPosition($previous);
+    }
+
+    /**
+     * Moves the document down.
+     *
+     * @throws \RuntimeException If the document is already the last.
+     */
+    public function moveDown()
+    {
+        if (null === $next = $this->getNext()) {
+            throw new \RuntimeException('The document is already the last.');
+        }
+
+        $this->swapPosition($next);
+    }
+
+    public function sortableSetPosition()
+    {
+        if ($this->sortableSkip()) {
+            return;
+        }
+
+        $maxPosition = (int) $this->getSortableRepository()->getMaxPosition($this->sortableScopeCriteria());
+
+        $position = $this->get{{ options.field|ucfirst }}();
+
+        if ($this->isNew()) {
+            if (null === $position) {
+{% if 'top' == options.new_position %}
+                $position = 1;
+{% else %}
+                $position = $maxPosition + 1;
+{% endif %}
+            }
+        } else {
+            if (!$this->isFieldModified('{{ options.field }}')) {
+                return;
+            }
+
+            $oldPosition = $this->getOriginalFieldValue('{{ options.field }}');
+
+            if ((int) $position === $oldPosition) {
+                return;
+            }
+        }
+
+        $position = (int) $position;
+
+        if ($position < 1) {
+            throw new \RuntimeException('The position cannot be lower than 1.');
+        }
+        if ($position > ($maxPosition + 1)) {
+            throw new \RuntimeException('The position cannot be higher than the max.');
+        }
+
+        $this->set{{ options.field|ucfirst }}($position);
+
+        // move documents
+        if ($this->isNew()) {
+            $this->getSortableRepository()->update(
+                array_merge(
+                    $this->sortableScopeCriteria(),
+                    array('{{ options.field }}' => array('$gte' => $position))
+                ),
+                array('$inc' => array('{{ options.field }}' => 1)),
+                array('multiple' => true)
+            );
+        } else {
+            $this->getSortableRepository()->update(
+                array_merge(
+                    $this->sortableScopeCriteria(),
+                    array('{{ options.field }}' => array(
+                        '$gte' => min($position, $oldPosition),
+                        '$lte' => max($position, $oldPosition)
+                    ))
+                ),
+                array('$inc' => array('{{ options.field }}' => $position > $oldPosition ? -1 : 1)),
+                array('multiple' => true)
+            );
+        }
+    }
+
+    public function sortableRemovePosition()
+    {
+        $this->getSortableRepository()->update(
+            array_merge(
+                $this->sortableScopeCriteria(),
+                array('{{ options.field }}' => array('$gt' => $this->get{{ options.field|ucfirst }}()))
+            ),
+            array('$inc' => array('{{ options.field }}' => -1)),
+            array('multiple' => true)
+        );
+    }
+
+    public function sortableSkip()
+    {
+        return false;
+    }
+
+    public function sortableScopeCriteria()
+    {
+        return array(
+{% for field in options.scope %}
+{% if config_class.referencesOne[field] is defined %}
+            '{{ field }}' => $this->get{{ field|ucfirst }}()->getId(),
+{% else %}
+            '{{ field }}' => $this->get{{ field|ucfirst }}(),
+{% endif %}
+{% endfor %}
+        );
+    }
+
+    protected function getSortableRepository()
+    {
+{% if config_class.inheritable or config_class.inheritance %}
+        $metadata = $this->getMetadata();
+        if (false !== $metadata['inheritance']) {
+            $repository = $this->getRepository()->getLastParentRepository();
+        } else {
+            $repository = $this->getRepository();
+        }
+
+        return $repository;
+{% else %}
+        return $this->getRepository();
+{% endif %}
+    }

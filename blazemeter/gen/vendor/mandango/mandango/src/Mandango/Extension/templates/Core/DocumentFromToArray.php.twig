@@ -1,0 +1,160 @@
+<?php
+
+    /**
+     * Imports data from an array.
+     *
+     * @param array $array An array.
+     *
+     * @return \{{ class }} The document (fluent interface).
+     */
+    public function fromArray(array $array)
+    {
+{# inheritance #}
+{% if config_class.inheritance %}
+        parent::fromArray($array);
+{% elseif not config_class.isEmbedded %}
+        if (isset($array['id'])) {
+            $this->setId($array['id']);
+        }
+{% endif %}
+{# fields #}
+{% for name, field in config_class.fields %}
+{% if field.inherited is not defined or not field.inherited %}
+        if (array_key_exists('{{ name }}',$array)) {
+            $this->set{{ name|ucfirst }}($array['{{ name }}']);
+        }
+{% endif %}
+{% endfor %}
+{# references one #}
+{% for name, reference in config_class.referencesOne %}
+{% if reference.inherited is not defined or not reference.inherited %}
+        if (isset($array['{{ name }}'])) {
+            $this->set{{ name|ucfirst }}($array['{{ name }}']);
+        }
+{% endif %}
+{% endfor %}
+{# references Many #}
+{% for name, reference in config_class.referencesMany %}
+{% if reference.inherited is not defined or not reference.inherited %}
+        if (isset($array['{{ name }}'])) {
+            $this->remove{{ name|ucfirst }}($this->get{{ name|ucfirst }}()->all());
+            $this->add{{ name|ucfirst }}($array['{{ name }}']);
+        }
+{% endif %}
+{% endfor %}
+{# embeddeds one #}
+{% for name, embedded in config_class.embeddedsOne %}
+{% if embedded.inherited is not defined or not embedded.inherited %}
+        if (array_key_exists('{{ name }}',$array)) {
+            if(isset($array['{{ name }}'])){
+                $embedded = $this->get{{ name|ucfirst }}();
+                if($embedded == null){
+                    $embedded = new \{{ embedded.class }}($this->getMandango());
+                }
+                $embedded->fromArray($array['{{ name }}']);
+            }else{
+                $embedded=null;
+            }
+            $this->set{{ name|ucfirst }}($embedded);
+        }
+{% endif %}
+{% endfor %}
+{# embeddeds many #}
+{% for name, embedded in config_class.embeddedsMany %}
+{% if embedded.inherited is not defined or not embedded.inherited %}
+        if (isset($array['{{ name }}'])) {
+            $embeddeds = array();
+            foreach ($array['{{ name }}'] as $documentData) {
+                $embeddeds[] = $embedded = new \{{ embedded.class }}($this->getMandango());
+                $embedded->setDocumentData($documentData);
+            }
+            $this->get{{ name|ucfirst }}()->replace($embeddeds);
+        }
+{% endif %}
+{% endfor %}
+
+        return $this;
+    }
+
+    /**
+     * Export the document data to an array.
+     *
+     * @param Boolean $withReferenceFields Whether include the fields of references or not (false by default).
+     * @param Boolean $withEmbeddedFields Whether include the fields of embedded or not (true by default).
+     * @param bool $returnEmpty wherever return null
+     * @return array An array with the document data.
+     */
+    public function toArray($withReferenceFields = false,$withEmbeddedFields = true,$returnEmpty = false)
+    {
+{# inheritance #}
+{% if config_class.inheritance %}
+        $array = parent::toArray($withReferenceFields);
+{% elseif config_class.isEmbedded %}
+        $array = array();
+{% else %}
+        $id = $this->getId();
+        if($id instanceof \MongoId){
+            $id = strval($id);
+        }
+        $array = array('id' => $id);
+{% endif %}
+
+{# fields #}
+{% for name, field in config_class.fields %}
+{% if field.inherited is not defined or not field.inherited %}
+{# no reference field #}
+{% if field.referenceField is not defined %}
+        $tmp =$this->get{{ name|ucfirst }}();
+        if($tmp !== null || $returnEmpty){
+            $array['{{ name }}'] = $tmp;
+        }
+{# reference field #}
+{% else %}
+        if ($withReferenceFields) {
+            $tmp=$this->get{{ name|ucfirst }}();
+            if($tmp instanceof \MongoId){
+                $tmp = strval($tmp);
+            }else{
+            if(is_array($tmp)){
+                $tmp=array_map(function($item){
+                    if($item instanceof \MongoId){
+                        return strval($item);
+                    }
+                        return $item;
+                    },$tmp);
+                }
+            }
+            if($tmp !== null || $returnEmpty){
+                $array['{{ name }}'] = $tmp;
+            }
+        }
+{% endif %}
+{% endif %}
+{% endfor %}
+
+        if ($withEmbeddedFields) {
+{% for name, embedded in config_class.embeddedsOne %}
+{% if embedded.inherited is not defined or not embedded.inherited %}
+            $tmp=$this->get{{ name|ucfirst }}();
+            if ($tmp !== null) {
+                $array['{{ name }}'] = $tmp->toArray($withReferenceFields,$withEmbeddedFields,$returnEmpty);
+            }else if($returnEmpty){
+                $array['{{ name }}'] = null;
+            }
+{% endif %}
+{% endfor %}
+{% for name, embedded in config_class.embeddedsMany %}
+    {% if embedded.inherited is not defined or not embedded.inherited %}
+        $tmp=$this->get{{ name|ucfirst }}();
+        if ($tmp != null) {
+            foreach ($tmp as $tmp_item) {
+                $array['{{ name }}'][] = $tmp_item->toArray($withReferenceFields,$withEmbeddedFields,$returnEmpty);
+            }
+        }else if($returnEmpty){
+            $array['{{ name }}'] = [];
+        }
+    {% endif %}
+{% endfor %}
+        }
+        return $array;
+    }
