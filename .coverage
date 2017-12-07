@@ -1,13 +1,1 @@
-[run]
-branch = True
-source = .
-
-[report]
-exclude_lines =
-    if self.debug:
-    pragma: no cover
-    raise NotImplementedError
-    if __name__ == .__main__.:
-ignore_errors = True
-omit =
-    tests/*
+!coverage.py: This is a private format, don't read it directly!{"lines":{"/Users/ajzye01/Desktop/junk1/stam/mathlib.py":[1,4],"/Users/ajzye01/Desktop/junk1/stam/test_hello.py":[1,19,4,14,9]}}

@@ -12,4 +12,6 @@ script:
   - python -m pytest --capture=no
 
 after_success:
+  - coverage run test_hello.py
   - codecov --token=697f5051-f61d-4148-bea5-c4f9c411cf9e
+
